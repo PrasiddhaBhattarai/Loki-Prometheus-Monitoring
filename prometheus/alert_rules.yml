@@ -1,0 +1,69 @@
+# 
+# labels.instance --> prometheus target, label of time series (scrape_configs.job_name.static_config.target)
+# 
+# avg by (instance) --> here each instance is the individual CPU core of same server
+
+groups:
+  - name: app-alerts
+    rules:
+      # Hign frontend errors
+      - alert: FrontendErrorRateHigh
+        expr: increase(app_errors_total{job="frontend"}[1m]) > 3
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          description: "Frontend service errors detected on {{$labels.instance}}"
+
+      # High Backend errors
+      - alert: BackendErrorRateHigh
+        expr: increase(app_errors_total{job="backend"}[1m]) > 3
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          description: "Backend service errors detected on {{$labels.instance}}"
+
+      # High DB connections
+      - alert: DatabaseHighConnections
+        expr: pg_stat_activity_count{datname="mydb"} > 50
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          description: "Database Connection count exceeded safe limit."
+
+      # Instance down
+      # applies to all scraped jobs
+      - alert: InstanceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          description: "Instance {{$labels.instance}} of job {{$labels.job}} is down"
+
+
+  - name: node-alerts
+    interval: 30s
+    rules:
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is above 50% for more than 5 minutes."
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High memory usage detected on {{ $labels.instance }}"
+          description: "Memory usage is above 80% for more than 2 minutes."
