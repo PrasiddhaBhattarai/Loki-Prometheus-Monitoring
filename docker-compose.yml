@@ -1,0 +1,135 @@
+services:
+  #-----frontend-----
+  frontend:
+    build: ./frontend
+    image: demo-frontend:latest
+    container_name: demo-frontend
+    ports:
+      - "5050:5000"
+    restart: unless-stopped
+
+  #-----backend-----
+  backend:
+    build: ./backend
+    image: demo-backend:latest
+    container_name: demo-backend
+    ports:
+      - "5051:5001"
+    environment:
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  #-----db-----
+  db:
+    image: postgres:14
+    container_name: db
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  #-----prometheus-----
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - prometheus_data:/prometheus
+    depends_on:
+      - frontend
+      - backend
+      - db
+      - node-exporter
+      - db-exporter
+    restart: unless-stopped
+  
+  #-----node-exporter-----
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev)($|/)"
+    restart: unless-stopped
+
+  #-----db-exporter-----
+  db-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: db-exporter
+    environment:
+      # db connection string: username:pwd@db-host:5432/dbname
+      - DATA_SOURCE_NAME=postgresql://root:root@db:5432/mydb?sslmode=disable
+    ports:
+      - "9187:9187"   #default postgres_exporter port
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  #-----grafana-----
+  grafana:
+    image: grafana/grafana:13.2.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  #-----alertmanager-----
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager-data:/alertmanager
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: loki
+    command: -config.file=/etc/loki/loki-config.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+
+volumes:
+  db-data:
+    name: db-data
+  prometheus_data:
+    name: prometheus_data
+  grafana-data:
+    name: grafana-data
+  alertmanager-data:
+    name: alertmanager-data
+  loki_data:
+    name: loki_data
