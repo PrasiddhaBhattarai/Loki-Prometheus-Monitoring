@@ -1,4 +1,4 @@
-# Monitoring and Alerting
+# Loki Prometheus Monitoring and Alerting
 
 ## Overview
 This repository demonstrates a Docker Compose monitoring stack with:
@@ -9,12 +9,30 @@ This repository demonstrates a Docker Compose monitoring stack with:
 - Grafana for visualization and troubleshooting
 
 ## Architecture
+
+<img src="readme_img/architecture.png" width="700">
+<br><br>
+
+### 3-tier application Monitoring Architecture
+```
+        ┌─────────── Docker Compose (EC2) ───────────┐
+        │                                            │
+ ALB ──►│  grafana ──► prometheus ──► 3-tier-apps    │
+        │     │            │  └────► node_exporter   │
+        │     │            ▼                         │
+        │     │       alertmanager ──► Slack         │
+        │     ▼                                      │
+        │    loki ◄──────────── backend (logs)       │
+        └────────────────────────────────────────────┘
+```
+
 - `frontend/`: Flask frontend on port `5050` mapped to container port `5000`
 - `backend/`: Flask backend on port `5051` mapped to container port `5001`
 - `db/`: PostgreSQL `mydb` on port `5432`
 - `prometheus/`: Prometheus configuration and alert rules
 - `alertmanager/`: Alertmanager routing rules and Slack receivers
 - `grafana`: Grafana dashboard service with admin/admin credentials
+- `loki`: Loki collets logs from backend and exposes it at /metrics on port `3100` 
 - `scripts/fire_errors.sh`: request generator to produce application errors
 
 ## Ports
@@ -23,6 +41,7 @@ This repository demonstrates a Docker Compose monitoring stack with:
 - `http://localhost:9090` → Prometheus
 - `http://localhost:3000` → Grafana
 - `http://localhost:9093` → Alertmanager
+- `http://localhost:3100/metrics` → Loki
 - `http://localhost:9100/metrics` → node exporter
 - `http://localhost:9187/metrics` → postgres exporter
 
@@ -104,43 +123,80 @@ This sends requests to both services and exposes intermittent failures which tri
 
 
 ## Grafana Dashboard
-<img src="readme_img/Screenshot 2026-05-22 at 12.03.07.png" alt="diagram" width="700">
+<img src="readme_img/service_dashboard.png" width="700">
 <br><br>
 
 **Backend Service Row**
 - **P90 Latency**
+  - Data-source: `Prometheus`
   - Query: `histogram_quantile(0.9,sum(rate(app_request_latency_seconds_bucket{instance="backend:5001", job="backend"}[1m])) by (le))`
   - Description: Measures the 90th percentile of backend request latency over the past minute, highlighting slowest requests.
 
 - **Backend Errors**
+  - Data-source: `Prometheus`
   - Query: `increase(app_errors_total{job="backend"}[1m])`
   - Description: Counts the number of backend errors that occurred in the last minute.
 
 - **Backend Uptime**
+  - Data-source: `Prometheus`
   - Query: `up{job="backend"}`
+  - Description: Indicates whether the backend service is currently running (1 = up, 0 = down).
+
+- **Backend logs**
+  - Data-source: `Loki`
+  - Query: `{logger="backend"} |= `\`\`
+  - Description: Indicates whether the backend service is currently running (1 = up, 0 = down).
+
+- **Backend errors**
+  - Data-source: `Loki`
+  - Query: `{severity="error"} |= `\`\`
   - Description: Indicates whether the backend service is currently running (1 = up, 0 = down).
 
 **Frontend Service Row**
 - **Frontend Errors**
+  - Data-source: `Prometheus`
   - Query: `increase(app_errors_total{job="frontend"}[1m])`
   - Description: Counts the number of web service errors over the past minute.
 
 - **Frontend Uptime**
+  - Data-source: `Prometheus`
   - Query: `up{job="frontend"}`
   - Description: Shows if the web service is currently operational (1 = up, 0 = down).
 
 **Database Service Row**
 - **Connection Count**
+  - Data-source: `Prometheus`
   - Query: `sum by (instance) (pg_stat_activity_count{datname="mydb"})`
   - Description: Displays the total number of active connections to the database "mydb" per instance.
 
 - **DB Uptime**
+  - Data-source: `Prometheus`
   - Query: `up{job="postgres"}`
   - Description: Indicates whether the PostgreSQL database service is running (1 = up, 0 = down).
 
 - **Database Disk Usage**
+  - Data-source: `Prometheus`
   - Query: `pg_database_size_bytes{datname="mydb"} / (1024*1024)`
   - Description: Shows the size of the database "mydb" in megabytes. 
+
+
+**Instance/Node Dashboard**
+
+<img src="readme_img/node_dashboard.png" width="700">
+<br><br>
+
+- **CPU Usage**
+  - Data-source: `Prometheus`
+  - Query: `100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)`
+    - Description: Calculates “CPU usage percentage per server instance”
+    - Notes:
+      - `rate()` = Calculates the average per-second rate over the whole range window (here range window is 1m)
+      - `irate()` = Calculates the rate using only the last two samples regardless of range window
+
+- **Memory Usage**   
+  - Data-source: `Prometheus`   
+  - Query: `(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100`
+    - Description: Calculates “memory usage percentage”
 
 ## Notes
 - Grafana default admin user/password: `admin` / `admin`
