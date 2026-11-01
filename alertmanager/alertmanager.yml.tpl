@@ -27,7 +27,7 @@ receivers:
         username: "Prometheus-bot"
         icon_emoji: ":rotating_light:"
         text: ":rotating_light: {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})"
-        api_url: ${SLACK_WEBHOOK_URL_devs}
+        api_url: "${SLACK_WEBHOOK_URL_devs}"
 
   - name: "slack-devops"
     slack_configs:
@@ -36,4 +36,4 @@ receivers:
         username: "Prometheus-bot"
         icon_emoji: ":warning:"
         text: ":warning: {{.CommonLabels.alertname}} ({{.CommonLabels.severity}})"
-        api_url: ${SLACK_WEBHOOK_URL_devops}
+        api_url: "${SLACK_WEBHOOK_URL_devops}"
