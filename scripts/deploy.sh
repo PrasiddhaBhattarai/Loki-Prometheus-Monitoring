@@ -15,6 +15,6 @@ export SLACK_WEBHOOK_URL_devs="$(get_param /monitoring/slack_webhook_url_devs)"
 envsubst '${SLACK_WEBHOOK_URL_devops} ${SLACK_WEBHOOK_URL_devs}' \
   < alertmanager/alertmanager.yml.tpl > alertmanager/alertmanager.yml
 chown 65534:65534 alertmanager/alertmanager.yml   # alertmanager runs as "nobody"
-chmod 600 alertmanager/alertmanager.yml
+chmod 666 alertmanager/alertmanager.yml
 
 docker compose up -d --build --force-recreate --remove-orphans
