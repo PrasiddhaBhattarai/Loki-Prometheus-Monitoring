@@ -12,7 +12,7 @@ export SLACK_WEBHOOK_URL_devops="$(get_param /monitoring/slack_webhook_url_devop
 export SLACK_WEBHOOK_URL_devs="$(get_param /monitoring/slack_webhook_url_devs)"
 
 # Only substitute our two variables, so any other $ in the file is left alone
-envsubst '${slack_webhook_url_devops} ${slack_webhook_url_devs}' \
+envsubst '${SLACK_WEBHOOK_URL_devops} ${SLACK_WEBHOOK_URL_devs}' \
   < alertmanager/alertmanager.yml.tpl > alertmanager/alertmanager.yml
 chown 65534:65534 alertmanager/alertmanager.yml   # alertmanager runs as "nobody"
 chmod 600 alertmanager/alertmanager.yml
